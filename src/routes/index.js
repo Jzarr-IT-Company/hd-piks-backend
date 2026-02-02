@@ -108,4 +108,8 @@ import blogRoutes from './blog.routes.js';
 router.use('/blogs', blogRoutes);
 import adminRoutes from './admin.routes.js';
 router.use('/admin', adminRoutes);
+import categoryRoutes from './category.routes.js';
+// mount category routes on this router (which your main app mounts)
+router.use('/', categoryRoutes);
+
 export default router

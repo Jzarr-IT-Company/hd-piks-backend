@@ -1,4 +1,4 @@
-import Category from '../models/category.model.js';
+import Category from '../modules/category.js';
 
 export const createCategory = async ({ name, parent, status, createdBy }) => {
   return Category.create({ name, parent: parent || null, status: status || 'pending', createdBy });
