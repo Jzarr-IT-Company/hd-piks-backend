@@ -68,8 +68,56 @@ export const deleteCreatorImageController = async (req, res) => {
         return res.status(500).json({ status: 500, success: false, message: error.message });
     }
 };
-import { deleteImagesFIlesObjects, filterationByAll, getallData, getAllImagesfromDataBase, getAllUserImageById, saveImagesDataonDB, searchApiFromDBForImagesFilteration, updateImageApprovalOrRejectService, updateImageRejectService, getCreatorByUser } from "../services/images.services.js";
 
+// NEW: Get single image/asset by creator (GET /images/:id)
+export const getCreatorImageById = async (req, res) => {
+    try {
+        const user = req.user;
+        const creatorId = user?.creatorId;
+        const imageId = req.params.id;
+
+        if (!creatorId) {
+            return res
+                .status(403)
+                .json({ status: 403, success: false, message: 'Not a creator' });
+        }
+
+        const image = await Images.findById(imageId);
+        if (!image) {
+            return res
+                .status(404)
+                .json({ status: 404, success: false, message: 'Asset not found' });
+        }
+
+        if (image.creatorId.toString() !== creatorId.toString()) {
+            return res
+                .status(403)
+                .json({ status: 403, success: false, message: 'Not owner of asset' });
+        }
+
+        return res
+            .status(200)
+            .json({ status: 200, success: true, data: image });
+    } catch (error) {
+        return res
+            .status(500)
+            .json({ status: 500, success: false, message: error.message });
+    }
+};
+
+import {
+	deleteImagesFIlesObjects,
+	filterationByAll,
+	getallData,
+	getAllImagesfromDataBase,
+	getAllUserImageById,
+	saveImagesDataonDB,
+	searchApiFromDBForImagesFilteration,
+	updateImageApprovalOrRejectService,
+	updateImageRejectService,
+	getCreatorByUser,
+	generateImageVariants,
+} from "../services/images.services.js";
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp', 'video/mp4'];
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024; // 30 MB
@@ -150,13 +198,45 @@ const saveImages = async (req, res) => {
             }
         }
         // Use creatorId for image
-        const obj = { imagesize, imagetype, imageUrl, imageDetail, creatorId: creator?._id, category, subcategory, subsubcategory, title, description, freePremium, expireimagedate, zipfolder, zipfolderurl, termsConditions, permissionLetter, keywords, imageData, s3Key, s3Url, fileMetadata };
+        const obj = {
+            imagesize,
+            imagetype,
+            imageUrl,
+            imageDetail,
+            creatorId: creator?._id,
+            category,
+            subcategory,
+            subsubcategory,
+            title,
+            description,
+            freePremium,
+            expireimagedate,
+            zipfolder,
+            zipfolderurl,
+            termsConditions,
+            permissionLetter,
+            keywords,
+            imageData,
+            s3Key,
+            s3Url,
+            fileMetadata,
+        };
         const validationErrors = validateUploadPayload(obj);
         if (validationErrors.length) {
-            return res.status(400).json({ status: 400, success: false, message: 'validation_failed', errors: validationErrors });
+            return res.status(400).json({
+                status: 400,
+                success: false,
+                message: 'validation_failed',
+                errors: validationErrors,
+            });
         }
-        await saveImagesDataonDB(obj);
-        return res.status(200).json({ status: 200, success: true, message: "success" })
+        // Save main image document
+        const saved = await saveImagesDataonDB(obj);
+
+        // Trigger async variant generation (do not block response)
+        generateImageVariants(saved);
+
+        return res.status(200).json({ status: 200, success: true, message: "success" });
     } catch (error) {
         console.log(error.message)
         return res.status(500).json({ status: 500, success: false, message: "server error", errormessage: error.message })
@@ -247,6 +327,9 @@ const filterationByWord = async (req,res) => {
     }
 }
 
+// NEW: public categories endpoint (no auth, no creatorId required)
+
+
 export {
     saveImages,
     getAllImages,
@@ -256,5 +339,6 @@ export {
     approvedimages,
     rejectedimages,
     getDataAllFromDB,
-    filterationByWord
-}
+    filterationByWord,
+    // getPublicCategories, // <-- remove this line to avoid duplicate export
+};

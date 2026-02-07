@@ -1,3 +1,22 @@
+import db from '../modules/index.js';
+// If you ever need the Category model directly in this file, import it from:
+// import Category from '../modules/category.js';
+
+import sharp from 'sharp';
+import serverConfig from '../config/server.config.js';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+
+const { images: Images, creators: Creators } = db;
+
+// S3 client reused for variant generation
+const s3Client = new S3Client({
+	region: serverConfig.aws.region,
+	credentials: {
+		accessKeyId: serverConfig.aws.accessKeyId,
+		secretAccessKey: serverConfig.aws.secretAccessKey,
+	},
+});
+
 // Update image status by admin (approve/reject)
 const updateImageStatusById = async (id, status, reason = null) => {
     if (status === 'approved') {
@@ -13,8 +32,6 @@ const updateImageStatusById = async (id, status, reason = null) => {
         );
     }
 };
-import db from '../modules/index.js';
-const { images: Images, creators: Creators } = db;
 
 export const getCreatorByUser = async (userId) => {
     return Creators.findOne({ userId });
@@ -27,29 +44,27 @@ const saveImagesDataonDB = async (payload) => {
     } catch (error) {
         throw error;
     }
-}
+};
 
 const getAllUserImageById = async (id) => {
     try {
-        // Now filter by creatorId instead of userId
         const response = await Images.find({ creatorId: id }).exec();
         return response;
     } catch (error) {
         throw error;
     }
 };
+
 const getAllImagesfromDataBase = async () => {
     try {
         // Remove caching temporarily to test
         const response = await Images.find({ approved: true }).exec();
-         console.log("Fetched from DB:", response.map(x => x.category)); // Add this line
+        console.log("Fetched from DB:", response.map(x => x.category)); // Add this line
         return response;
     } catch (error) {
         throw error;
     }
-}
-
-
+};
 
 const getallData = async () => {
     try {
@@ -58,7 +73,7 @@ const getallData = async () => {
     } catch (error) {
         throw error;
     }
-}
+};
 
 const deleteImagesFIlesObjects = async (_id) => {
     try {
@@ -67,47 +82,7 @@ const deleteImagesFIlesObjects = async (_id) => {
     } catch (error) {
         throw error;
     }
-}
-
-// const searchApiFromDBForImagesFilteration =async(searchQuery)=>{
-//     try {
-//         const response = await Images.find({
-//             $or: [
-//                 { category: new RegExp(`^${searchQuery}`, 'i') },
-//                 { subcategory: new RegExp(`^${searchQuery}`, 'i') },
-//                 { subsubcategory: new RegExp(`^${searchQuery}`, 'i') },
-//                 { title: new RegExp(searchQuery, 'i') },
-//                 { description: new RegExp(searchQuery, 'i') },
-//                 { keywords: { $in: [new RegExp(searchQuery, 'i')] } }
-//             ]
-//         });
-//         return response
-//     } catch (error) {
-//         throw error;
-//     }
-// }
-
-// const searchApiFromDBForImagesFilteration = async (searchQuery) => {
-//     try {
-//         const query = new RegExp(searchQuery, 'i'); // 'i' flag makes it case-insensitive
-
-//         const response = await Images.find({
-//             $or: [
-//                 { category: query },
-//                 { subcategory: query },
-//                 { subsubcategory: query },
-//                 { title: query },
-//                 { description: query },
-//                 { keywords: { $in: [query] } }
-//             ]
-//         })
-//         // .sort({ relevanceScore: { $meta: "textScore" } });
-
-//         return response;
-//     } catch (error) {
-//         throw error;
-//     }
-// };
+};
 
 const searchApiFromDBForImagesFilteration = async (searchQuery) => {
     try {
@@ -168,61 +143,7 @@ const updateImageRejectService = async (_id, reason = null) => {
     }
 };
 
-// const filterationByAll = async (searchTerm) => {
-//     try {
-//         const query = {
-//             $or: [
-//                 { category: { $regex: searchTerm, $options: 'i' } },
-//                 { subcategory: { $regex: searchTerm, $options: 'i' } },
-//                 { subsubcategory: { $regex: searchTerm, $options: 'i' } },
-//                 { keywords: { $elemMatch: { $regex: searchTerm, $options: 'i' } } },
-//             ]
-//         };
-//         const results = await Images.find(query).exec();
-//         return results;  // Return the filtered results
-//     } catch (error) {
-//         throw error;
-//     }
-// };
-
-
 const filterationByAll = async (searchTerm) => {
-    // try {
-    //     // Try to find exact matches first
-    //     const exactQuery = {
-    //         $or: [
-    //             { title: { $regex: `^${searchTerm}`, $options: 'i' } },
-    //             { category: { $regex: `^${searchTerm}`, $options: 'i' } },
-    //             { subcategory: { $regex: `^${searchTerm}`, $options: 'i' } },
-    //             { subsubcategory: { $regex: `^${searchTerm}`, $options: 'i' } },
-    //             { keywords: { $elemMatch: { $regex: `^${searchTerm}`, $options: 'i' } } },
-    //         ],
-    //     };
-
-    //     let results = await Images.find(exactQuery).exec();
-
-    //     // Perform a broader search only if no exact matches are found
-    //     if (results.length === 0) {
-    //         const words = searchTerm.split(" "); // Split search term into words
-    //         const regexPatterns = words.map(word => new RegExp(word, 'i')); // Create regex for each word
-
-    //         const broadQuery = {
-    //             $or: [
-    //                 { title: { $regex: new RegExp(words.join("|"), 'i') } },
-    //                 { category: { $regex: new RegExp(words.join("|"), 'i') } },
-    //                 { subcategory: { $regex: new RegExp(words.join("|"), 'i') } },
-    //                 { subsubcategory: { $regex: new RegExp(words.join("|"), 'i') } },
-    //                 { keywords: { $elemMatch: { $regex: new RegExp(words.join("|"), 'i') } } },
-    //             ],
-    //         };
-
-    //         results = await Images.find(broadQuery).exec(); // Update results only if broad search is executed
-    //     }
-
-    //     return results; // Return the filtered results
-    // } catch (error) {
-    //     throw error; // Handle errors
-    // }
     try {
         const response = await Images.find({}).exec();
         return response
@@ -231,7 +152,94 @@ const filterationByAll = async (searchTerm) => {
     }
 };
 
+export const generateImageVariants = async (imageDoc) => {
+	try {
+		if (!imageDoc || !imageDoc.s3Key) return;
 
+		const mime = imageDoc.fileMetadata?.mimeType || '';
+		// Only generate variants for images (skip videos and others)
+		if (!mime.startsWith('image/')) return;
+
+		// 1) Download original from S3
+		const getCmd = new GetObjectCommand({
+			Bucket: serverConfig.aws.bucket,
+			Key: imageDoc.s3Key,
+		});
+		const resp = await s3Client.send(getCmd);
+
+		const chunks = [];
+		for await (const chunk of resp.Body) {
+			chunks.push(chunk);
+		}
+		const originalBuffer = Buffer.concat(chunks);
+		const originalMeta = await sharp(originalBuffer).metadata();
+		const originalWidth = originalMeta.width || 0;
+
+		// 2) Define desired sizes (always generate all; clamp to originalWidth to avoid upscaling)
+		const sizeDefs = [
+			{ variant: 'thumbnail', width: 300 },
+			{ variant: 'small', width: 800 },
+			{ variant: 'medium', width: 1400 },
+			{ variant: 'large', width: 2000 },
+		];
+
+		const ext = mime === 'image/png' ? 'png' : 'jpg';
+		const variants = [];
+
+		// 3) Generate and upload each resized variant
+		for (const def of sizeDefs) {
+			// If original is smaller, don't upscale; use originalWidth
+			const targetWidth = originalWidth && originalWidth < def.width ? originalWidth : def.width;
+
+			const resized = await sharp(originalBuffer)
+				.resize({ width: targetWidth })
+				.toBuffer();
+			const resizedMeta = await sharp(resized).metadata();
+
+			const key = `images/${imageDoc.creatorId}/${imageDoc._id}/variants/${def.variant}.${ext}`;
+
+			const putCmd = new PutObjectCommand({
+				Bucket: serverConfig.aws.bucket,
+				Key: key,
+				Body: resized,
+				ContentType: mime,
+			});
+			await s3Client.send(putCmd);
+
+			variants.push({
+				variant: def.variant,
+				url: `https://${serverConfig.aws.domain}/${key}`,
+				s3Key: key,
+				dimensions: {
+					width: resizedMeta.width || null,
+					height: resizedMeta.height || null,
+				},
+				fileSize: resized.length,
+			});
+		}
+
+		// 4) Add original as a variant entry
+		variants.push({
+			variant: 'original',
+			url: imageDoc.s3Url || imageDoc.imageUrl,
+			s3Key: imageDoc.s3Key,
+			dimensions: {
+				width: imageDoc.fileMetadata?.dimensions?.width || originalMeta.width || null,
+				height: imageDoc.fileMetadata?.dimensions?.height || originalMeta.height || null,
+			},
+			fileSize: imageDoc.fileMetadata?.fileSize || originalBuffer.length,
+		});
+
+		// 5) Persist mediaVariants on the same image doc
+		await Images.findByIdAndUpdate(
+			imageDoc._id,
+			{ mediaVariants: variants },
+			{ new: true }
+		);
+	} catch (err) {
+		console.error('[generateImageVariants] failed for image', imageDoc?._id, err);
+	}
+};
 
 export {
     saveImagesDataonDB,
@@ -243,5 +251,6 @@ export {
     updateImageRejectService,
     updateImageStatusById,
     getallData,
-    filterationByAll
-}
+    filterationByAll,
+    // ensure generateImageVariants is exported
+};

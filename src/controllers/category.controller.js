@@ -20,22 +20,11 @@ export const getCategoryTreeController = async (req, res) => {
   }
 };
 
-// Public / creator-accessible: GET /categories
+// Public: GET /categories  (no auth required)
 export const getPublicCategoriesController = async (req, res) => {
   try {
-    const user = req.user;
-
-    // must be logged in
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
-
-    // must have a creatorId (approved creator)
-    if (!user.creatorId) {
-      return res.status(403).json({ success: false, message: 'Only creators can access categories' });
-    }
-
-    const tree = await getCategoryTree(); // uses approved admin-created categories
+    // Just return the approved category tree; ignore req.user
+    const tree = await getCategoryTree();
     return res.json({ success: true, data: tree });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

@@ -4,7 +4,8 @@ import {
   getCategoryTreeController,
   updateCategoryController,
   deleteCategoryController,
-  getPublicCategoriesController,
+  getPublicCategoriesController
+  
 } from '../controllers/category.controller.js';
 import  authMiddleware  from '../middleware/check-auth.middleware.js';
 
@@ -19,7 +20,9 @@ const requireAdmin = (req, res, next) => {
 };
 
 // Public / creator-accessible: admin-created categories for upload UI
-router.get('/categories', authMiddleware, getPublicCategoriesController);
+//router.get('/categories', authMiddleware, getPublicCategoriesController);
+router.get('/categories', getPublicCategoriesController);
+
 
 // Admin: Create, read, update, delete
 router.get('/',  requireAdmin, getCategoryTreeController);

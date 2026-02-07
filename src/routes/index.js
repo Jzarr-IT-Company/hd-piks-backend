@@ -6,10 +6,12 @@ router.post('/s3/multipart/initiate', s3MultipartController.initiateMultipartUpl
 router.get('/s3/multipart/part-url', s3MultipartController.getMultipartPresignedUrlController);
 router.post('/s3/multipart/complete', s3MultipartController.completeMultipartUploadController);
 router.post('/s3/multipart/abort', s3MultipartController.abortMultipartUploadController);
-import { updateCreatorImageController, deleteCreatorImageController } from "../controllers/images.controllers.js";
+import { updateCreatorImageController, deleteCreatorImageController, getCreatorImageById } from "../controllers/images.controllers.js";
 // Creator update/delete asset endpoints
 router.patch('/images/:id', checkAuth, updateCreatorImageController);
 router.delete('/images/:id', checkAuth, deleteCreatorImageController);
+// NEW: get single image for edit
+router.get('/images/:id', checkAuth, getCreatorImageById);
 import { deleteUser, deleteUserAccount, getAllUsersData, getSignleUserData, getUserData, login, logout, signup, updateUserData, applyContributorController, updateContributorStatusController, getContributorStatusController } from "../controllers/signup.controlller.js";
 import { adminLogin } from "../controllers/admin.controller.js";
 // Admin login route
@@ -23,7 +25,7 @@ import * as followController from "../controllers/follow.controllers.js";
 import { AllImagesfromDB, approvedimages, fileObjectDelete, filterationByWord, getAllImages, getDataAllFromDB, rejectedimages, saveImages, searchFilterationImages } from "../controllers/images.controllers.js";
 import { saveLikes, unLikController, getLikeCountController, getLikeStatusController } from "../controllers/likes.controllers.js";
 router.get('/like/status', getLikeStatusController)
-import { getPresignedUploadUrl, deleteFile, getPresignedProfileImageUrl, saveProfileImageUrl } from "../controllers/s3.controller.js"; 
+import { getPresignedUploadUrl, deleteFile, getPresignedProfileImageUrl, saveProfileImageUrl, proxyDownload } from "../controllers/s3.controller.js"; 
 import {
 	addToCollection,
 	createUserCollection,
@@ -97,8 +99,9 @@ router.post('/getPresignedProfileImageUrl', checkAuth, getPresignedProfileImageU
 router.post('/saveProfileImageUrl', checkAuth, saveProfileImageUrl);
 router.post('/deleteS3File', deleteFile);
 
+// NEW: proxy download route (no auth, used for public downloads)
+router.get('/download', proxyDownload);
 
-router.delete('/deletePaymnet/:id', deletePayment)
 // Follow system routes
 router.post('/follow', checkAuth, followController.followUser);
 router.post('/unfollow', checkAuth, followController.unfollowUser);
@@ -111,5 +114,25 @@ router.use('/admin', adminRoutes);
 import categoryRoutes from './category.routes.js';
 // mount category routes on this router (which your main app mounts)
 router.use('/', categoryRoutes);
+
+// Import DB to access creators collection
+import db from "../modules/index.js";
+
+// Public: get a single creator by ID (used by frontend to show creator name on assets)
+router.get('/creators/:id', async (req, res) => {
+	try {
+		const { id } = req.params;
+		const creator = await db.creators.findById(id).lean();
+
+		if (!creator) {
+			return res.status(404).json({ success: false, message: 'Creator not found' });
+		}
+
+		return res.json({ success: true, data: creator });
+	} catch (err) {
+		console.error('[GET /creators/:id] Failed to load creator', err);
+		return res.status(500).json({ success: false, message: 'Failed to load creator' });
+	}
+});
 
 export default router

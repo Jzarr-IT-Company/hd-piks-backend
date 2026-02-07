@@ -181,3 +181,59 @@ export const deleteFile = async (req, res) => {
         });
     }
 };
+
+// NEW: Proxy download from S3 so we can force attachment download
+export const proxyDownload = async (req, res) => {
+    try {
+        const { key, filename } = req.query;
+        if (!key) {
+            return res.status(400).json({
+                status: 400,
+                success: false,
+                message: "s3Key (key) is required"
+            });
+        }
+
+        const { S3Client, GetObjectCommand } = await import("@aws-sdk/client-s3");
+        const serverConfig = (await import("../config/server.config.js")).default;
+
+        const s3Client = new S3Client({
+            region: serverConfig.aws.region,
+            credentials: {
+                accessKeyId: serverConfig.aws.accessKeyId,
+                secretAccessKey: serverConfig.aws.secretAccessKey
+            }
+        });
+
+        const cmd = new GetObjectCommand({
+            Bucket: serverConfig.aws.bucket,
+            Key: key,
+        });
+
+        const resp = await s3Client.send(cmd);
+
+        const safeName =
+            (filename && filename.toString().replace(/[\r\n"]/g, '')) ||
+            key.split('/').pop() ||
+            'asset';
+
+        res.setHeader('Content-Type', resp.ContentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+        if (resp.ContentLength != null) {
+            res.setHeader('Content-Length', resp.ContentLength.toString());
+        }
+
+        // Body is a stream – pipe it to response
+        resp.Body.pipe(res);
+    } catch (error) {
+        console.error("Error proxying download:", error);
+        if (!res.headersSent) {
+            return res.status(500).json({
+                status: 500,
+                success: false,
+                message: "Error downloading file",
+                error: error.message
+            });
+        }
+    }
+};
