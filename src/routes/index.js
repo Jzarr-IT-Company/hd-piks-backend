@@ -22,7 +22,7 @@ import { addPaymentDetail, deletePayment, getPaymentDetail, jazzcash, payment, p
 import checkAuth from "../middleware/check-auth.middleware.js";
 import { adminAuth } from "../middleware/adminAuth.js";
 import * as followController from "../controllers/follow.controllers.js";
-import { AllImagesfromDB, approvedimages, fileObjectDelete, filterationByWord, getAllImages, getDataAllFromDB, rejectedimages, saveImages, searchFilterationImages } from "../controllers/images.controllers.js";
+import { AllImagesfromDB, approvedimages, fileObjectDelete, filterationByWord, getAllImages, getDataAllFromDB, rejectedimages, saveImages, searchFilterationImages, getAssetsPaginated } from "../controllers/images.controllers.js";
 import { saveLikes, unLikController, getLikeCountController, getLikeStatusController } from "../controllers/likes.controllers.js";
 router.get('/like/status', getLikeStatusController)
 import { getPresignedUploadUrl, deleteFile, getPresignedProfileImageUrl, saveProfileImageUrl, proxyDownload } from "../controllers/s3.controller.js"; 
@@ -115,6 +115,10 @@ import categoryRoutes from './category.routes.js';
 // mount category routes on this router (which your main app mounts)
 router.use('/', categoryRoutes);
 
+// NEW: sub‑category collections routes (admin + public)
+import subCategoryCollectionRoutes from './subCatgoryCollection.routes.js';
+router.use('/', subCategoryCollectionRoutes);
+
 // Import DB to access creators collection
 import db from "../modules/index.js";
 
@@ -134,5 +138,8 @@ router.get('/creators/:id', async (req, res) => {
 		return res.status(500).json({ success: false, message: 'Failed to load creator' });
 	}
 });
+
+// Public paginated assets endpoint for HomeGallery and other galleries
+router.get("/assets", getAssetsPaginated);
 
 export default router

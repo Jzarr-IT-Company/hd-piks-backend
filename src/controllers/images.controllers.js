@@ -330,6 +330,97 @@ const filterationByWord = async (req,res) => {
 // NEW: public categories endpoint (no auth, no creatorId required)
 
 
+// NEW: paginated public assets endpoint (GET /assets)
+const getAssetsPaginated = async (req, res) => {
+	try {
+		let { page = 1, limit = 24, parentCategory, subcategory, sort = 'newest' } = req.query;
+		page = parseInt(page, 10) || 1;
+		limit = parseInt(limit, 10) || 24;
+
+		const filter = {
+			approved: true,
+			rejected: { $ne: true },
+		};
+
+		let parentId = null;
+
+		// Filter by parent category name (Image, Video, Mockups, etc.)
+		if (parentCategory) {
+			const parentDoc = await Category.findOne({
+				name: new RegExp(`^${parentCategory}$`, 'i'),
+				parent: null,
+			});
+			if (!parentDoc) {
+				return res.status(200).json({
+					status: 200,
+					success: true,
+					data: [],
+					page,
+					limit,
+					total: 0,
+					hasMore: false,
+				});
+			}
+			parentId = parentDoc._id;
+			filter.category = parentId;
+		}
+
+		// Optional subcategory filter (by name, under parent)
+		if (subcategory && parentId) {
+			const subDoc = await Category.findOne({
+				name: new RegExp(`^${subcategory}$`, 'i'),
+				parent: parentId,
+			});
+			if (!subDoc) {
+				return res.status(200).json({
+					status: 200,
+					success: true,
+					data: [],
+					page,
+					limit,
+					total: 0,
+					hasMore: false,
+				});
+			}
+			filter.subcategory = subDoc._id;
+		}
+
+		// Sorting: newest (default) or popular by downloads
+		let sortOption = { createdAt: -1 };
+		if (sort === 'popular') {
+			sortOption = { downloads: -1 };
+		}
+
+		const total = await Images.countDocuments(filter);
+		const data = await Images.find(filter)
+			.sort(sortOption)
+			.skip((page - 1) * limit)
+			.limit(limit)
+			.populate('category subcategory subsubcategory')
+			.exec();
+
+		const hasMore = page * limit < total;
+
+		return res.status(200).json({
+			status: 200,
+			success: true,
+			data,
+			page,
+			limit,
+			total,
+			hasMore,
+		});
+	} catch (error) {
+		console.error('getAssetsPaginated error:', error);
+		return res.status(500).json({
+			status: 500,
+			success: false,
+			message: 'server error',
+			errormessage: error.message,
+		});
+	}
+};
+
 export {
     saveImages,
     getAllImages,
@@ -340,5 +431,5 @@ export {
     rejectedimages,
     getDataAllFromDB,
     filterationByWord,
-    // getPublicCategories, // <-- remove this line to avoid duplicate export
+    getAssetsPaginated,          // NEW export
 };

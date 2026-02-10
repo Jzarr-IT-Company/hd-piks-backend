@@ -7,7 +7,7 @@ import likeModule from "./like.module.js";
 import collectionsModule from "./collections.module.js";
 import creatorsModule from "./creators.module.js";
 import categoryModule from "./category.js";
-
+import subCategoryCollectionModule from "./subCategoryCollection.module.js";
 const db = {}
 
 db.mongoose = mongoose,
@@ -18,6 +18,7 @@ db.mongoose = mongoose,
     db.likes = likeModule,
     db.collections = collectionsModule,
     db.creators = creatorsModule,
-    db.categories = categoryModule
+    db.categories = categoryModule,
+    db.subCategoryCollections = subCategoryCollectionModule
 
 export default db
