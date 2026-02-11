@@ -24,6 +24,7 @@ import {
   getAllUsers,
   getAllCreators,
   getAllImages,
+  deleteImageById,
   deleteUserById,
   deleteCreatorById,
   updateCreatorStatusById,
@@ -68,6 +69,16 @@ export const updateImageStatus = async (req, res) => {
     const { id } = req.params;
     const { status, reason } = req.body;
     const result = await updateImageStatusById(id, status, reason);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const deleteImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await deleteImageById(id);
     res.json({ success: true, data: result });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

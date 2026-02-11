@@ -9,7 +9,10 @@ const createCollection = async (payload) => {  // create new collection
 };
 
 const getCollectionsByUser = async (userId) => {  // get all collections for a userID
-    return Collections.find({ userId }).sort({ createdAt: -1 }).exec();
+    return Collections.find({ userId })
+        .populate('items', 'imageUrl title')
+        .sort({ updatedAt: -1 })
+        .exec();
 };
 
 const addAssetToCollection = async (collectionId, assetId) => { // add asset to collection

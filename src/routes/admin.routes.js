@@ -8,6 +8,7 @@ import {
   listAllCreators,
   listAllImages,
   updateImageStatus,
+  deleteImage,
   deleteUser,
   deleteCreator,
   updateCreatorStatus,
@@ -32,6 +33,7 @@ router.get('/users', listAllUsers);
 router.get('/creators', listAllCreators);
 router.get('/images', listAllImages);
 router.patch('/images/:id/status', updateImageStatus);
+router.delete('/images/:id', deleteImage);
 router.delete('/users/:id', deleteUser);
 router.delete('/creators/:id', deleteCreator);
 router.patch('/creators/:id/status', updateCreatorStatus);

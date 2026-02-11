@@ -42,7 +42,12 @@ export async function completeMultipartUpload({ key, uploadId, parts }) {
         UploadId: uploadId,
         MultipartUpload: { Parts: parts }
     });
-    return await s3Client.send(command);
+    const response = await s3Client.send(command);
+    return {
+        ...response,
+        s3Key: key,
+        s3Url: `https://${serverConfig.aws.domain}/${key}`
+    };
 }
 
 // 4. Abort multipart upload

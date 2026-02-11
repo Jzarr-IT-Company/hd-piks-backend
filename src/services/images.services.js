@@ -5,6 +5,13 @@ import db from '../modules/index.js';
 import sharp from 'sharp';
 import serverConfig from '../config/server.config.js';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { pipeline } from 'stream/promises';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from 'ffmpeg-static';
+import ffprobeStatic from 'ffprobe-static';
 
 const { images: Images, creators: Creators } = db;
 
@@ -16,6 +23,74 @@ const s3Client = new S3Client({
 		secretAccessKey: serverConfig.aws.secretAccessKey,
 	},
 });
+
+if (ffmpegPath) {
+	ffmpeg.setFfmpegPath(ffmpegPath);
+}
+if (ffprobeStatic?.path) {
+	ffmpeg.setFfprobePath(ffprobeStatic.path);
+}
+
+const streamToBuffer = async (streamBody) => {
+	const chunks = [];
+	for await (const chunk of streamBody) {
+		chunks.push(chunk);
+	}
+	return Buffer.concat(chunks);
+};
+
+const downloadS3ToFile = async (key, filePath) => {
+	const getCmd = new GetObjectCommand({
+		Bucket: serverConfig.aws.bucket,
+		Key: key,
+	});
+	const resp = await s3Client.send(getCmd);
+	await pipeline(resp.Body, fs.createWriteStream(filePath));
+};
+
+const uploadFileToS3 = async ({ filePath, key, contentType }) => {
+	const putCmd = new PutObjectCommand({
+		Bucket: serverConfig.aws.bucket,
+		Key: key,
+		Body: fs.createReadStream(filePath),
+		ContentType: contentType,
+	});
+	await s3Client.send(putCmd);
+};
+
+const ffprobeAsync = (filePath) =>
+	new Promise((resolve, reject) => {
+		ffmpeg.ffprobe(filePath, (err, metadata) => {
+			if (err) return reject(err);
+			resolve(metadata);
+		});
+	});
+
+const transcodeToHeight = ({ inputPath, outputPath, height }) =>
+	new Promise((resolve, reject) => {
+		ffmpeg(inputPath)
+			.outputOptions([
+				'-map 0:v:0',
+				'-map 0:a?',
+				'-c:v libx264',
+				'-c:a aac',
+				'-preset veryfast',
+				'-crf 23',
+				'-movflags +faststart',
+				'-vf scale=-2:' + height,
+			])
+			.output(outputPath)
+			.on('end', resolve)
+			.on('error', (err, stdout, stderr) => {
+				console.error('[generateImageVariants] ffmpeg transcode error', {
+					height,
+					message: err?.message,
+					stderr,
+				});
+				reject(err);
+			})
+			.run();
+	});
 
 // Update image status by admin (approve/reject)
 const updateImageStatusById = async (id, status, reason = null) => {
@@ -157,7 +232,110 @@ export const generateImageVariants = async (imageDoc) => {
 		if (!imageDoc || !imageDoc.s3Key) return;
 
 		const mime = imageDoc.fileMetadata?.mimeType || '';
-		// Only generate variants for images (skip videos and others)
+
+		if (mime.startsWith('video/')) {
+			// Video variants: 1080p + 720p + original (best-effort)
+			const tempDir = path.join(os.tmpdir(), `hdpiks-video-${imageDoc._id}-${Date.now()}`);
+			fs.mkdirSync(tempDir, { recursive: true });
+			const inputPath = path.join(tempDir, 'original');
+			try {
+				let sourceWidth = imageDoc.fileMetadata?.dimensions?.width || null;
+				let sourceHeight = imageDoc.fileMetadata?.dimensions?.height || null;
+				let sourceSize = imageDoc.fileMetadata?.fileSize || null;
+				const variants = [
+					{
+						variant: 'original',
+						url: imageDoc.s3Url || imageDoc.imageUrl,
+						s3Key: imageDoc.s3Key,
+						dimensions: {
+							width: sourceWidth,
+							height: sourceHeight,
+						},
+						fileSize: sourceSize,
+					},
+				];
+
+				// Persist original immediately so mediaVariants is never empty for valid videos.
+				await Images.findByIdAndUpdate(
+					imageDoc._id,
+					{ mediaVariants: variants },
+					{ new: true }
+				);
+
+				await downloadS3ToFile(imageDoc.s3Key, inputPath);
+
+				try {
+					const sourceMeta = await ffprobeAsync(inputPath);
+					const sourceStream = sourceMeta?.streams?.find((s) => s.codec_type === 'video') || {};
+					sourceWidth = sourceStream.width || sourceWidth;
+					sourceHeight = sourceStream.height || sourceHeight;
+				} catch (probeErr) {
+					console.error('[generateImageVariants] ffprobe failed for video', imageDoc?._id, probeErr);
+				}
+
+				try {
+					sourceSize = sourceSize || fs.statSync(inputPath).size;
+				} catch {
+					// keep previous sourceSize fallback
+				}
+				variants[0].dimensions = { width: sourceWidth, height: sourceHeight };
+				variants[0].fileSize = sourceSize;
+
+				const basePrefix = `videos/${imageDoc.creatorId}/${imageDoc._id}/variants`;
+				const variantDefs = [
+					{ variant: '1080p', height: 1080 },
+					{ variant: '720p', height: 720 },
+					{ variant: '360p', height: 360 },
+				];
+
+				for (const def of variantDefs) {
+					if (sourceHeight && sourceHeight < def.height) continue; // no upscaling
+					try {
+						const outputPath = path.join(tempDir, `${def.variant}.mp4`);
+						await transcodeToHeight({
+							inputPath,
+							outputPath,
+							height: def.height,
+						});
+						const outMeta = await ffprobeAsync(outputPath);
+						const outStream = outMeta?.streams?.find((s) => s.codec_type === 'video') || {};
+						const outSize = fs.statSync(outputPath).size;
+						const outKey = `${basePrefix}/${def.variant}.mp4`;
+						await uploadFileToS3({
+							filePath: outputPath,
+							key: outKey,
+							contentType: 'video/mp4',
+						});
+						variants.push({
+							variant: def.variant,
+							url: `https://${serverConfig.aws.domain}/${outKey}`,
+							s3Key: outKey,
+							dimensions: {
+								width: outStream.width || null,
+								height: outStream.height || null,
+							},
+							fileSize: outSize,
+						});
+					} catch (variantErr) {
+						console.error(
+							`[generateImageVariants] failed video variant ${def.variant} for image ${imageDoc?._id}`,
+							variantErr
+						);
+					}
+				}
+
+				await Images.findByIdAndUpdate(
+					imageDoc._id,
+					{ mediaVariants: variants },
+					{ new: true }
+				);
+			} finally {
+				fs.rmSync(tempDir, { recursive: true, force: true });
+			}
+			return;
+		}
+
+		// Only generate variants for images (skip non-image/non-video)
 		if (!mime.startsWith('image/')) return;
 
 		// 1) Download original from S3
@@ -167,11 +345,7 @@ export const generateImageVariants = async (imageDoc) => {
 		});
 		const resp = await s3Client.send(getCmd);
 
-		const chunks = [];
-		for await (const chunk of resp.Body) {
-			chunks.push(chunk);
-		}
-		const originalBuffer = Buffer.concat(chunks);
+		const originalBuffer = await streamToBuffer(resp.Body);
 		const originalMeta = await sharp(originalBuffer).metadata();
 		const originalWidth = originalMeta.width || 0;
 

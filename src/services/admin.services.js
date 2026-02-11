@@ -15,6 +15,10 @@ export const getAllImages = async (query = {}) => {
   return Images.find({}).exec();
 };
 
+export const deleteImageById = async (id) => {
+  return Images.findByIdAndDelete(id).exec();
+};
+
 export const updateImageStatusById = async (id, status, reason) => {
   return Images.findByIdAndUpdate(id, { status, rejectionReason: reason }, { new: true }).exec();
 };
