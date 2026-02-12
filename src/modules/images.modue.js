@@ -115,7 +115,7 @@ const imagesSchema = new Schema({
         type: [{
             variant: {
                 type: String,
-                enum: ['thumbnail', 'small', 'medium', 'large', 'original']
+                enum: ['thumbnail', 'small', 'medium', 'large', 'original', '1080p', '720p', '360p']
             },
             url: String,
             s3Key: String,
@@ -212,6 +212,26 @@ const imagesSchema = new Schema({
         type: [Schema.Types.ObjectId],
         ref: 'collections',
         default: []
+    },
+    // Editor metadata (ImageKit or other editor integrations)
+    isEdited: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    originalImageId: {
+        type: Schema.Types.ObjectId,
+        ref: 'allImages',
+        default: null
+    },
+    editConfig: {
+        type: Object,
+        default: null
+    },
+    sourceProvider: {
+        type: String,
+        enum: ['s3', 'imagekit', null],
+        default: 's3'
     }
 }, { timestamps: true })
 

@@ -26,6 +26,7 @@ import { AllImagesfromDB, approvedimages, fileObjectDelete, filterationByWord, g
 import { saveLikes, unLikController, getLikeCountController, getLikeStatusController } from "../controllers/likes.controllers.js";
 router.get('/like/status', getLikeStatusController)
 import { getPresignedUploadUrl, deleteFile, getPresignedProfileImageUrl, saveProfileImageUrl, proxyDownload } from "../controllers/s3.controller.js"; 
+import { getImageKitAuthParams, saveEditedImageAsset } from "../controllers/imagekit.controllers.js";
 import {
 	addToCollection,
 	createUserCollection,
@@ -51,6 +52,9 @@ router.post('/addPaymentDetail', addPaymentDetail)
 router.post('/jazzcashpayment', jazzcash)
 router.post('/paymentDetailGetByID', paymentDetailGetByID)
 router.post('/saveImages', checkAuth, saveImages)
+// ImageKit editor routes	
+router.get('/imagekit/auth', checkAuth, getImageKitAuthParams);
+router.post('/imagekit/edited-asset', checkAuth, saveEditedImageAsset);
 // getCourses
 router.get('/getPaymentDetail', getPaymentDetail)
 

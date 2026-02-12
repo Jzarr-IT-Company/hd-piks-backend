@@ -13,6 +13,11 @@ const serverConfig = {
         bucket: process.env.AWS_S3_BUCKET_NAME,
         region: process.env.AWS_S3_REGION,
         domain: process.env.AWS_S3_DOMAIN
+    },
+    imagekit: {
+        publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+        privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+        urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
     }
 }
 
